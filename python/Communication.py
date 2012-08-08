@@ -404,7 +404,7 @@ class Communication(threading.Thread):
             ### START  COMMAND ###
 
             if self.__command == self.COM_START : 
-                print "Communication: Start Command"
+                print "Communication: Start Command (t %f)" % (time.clock())
                 if self.__dll.xpci_sendExposureParameters( \
                     self.__ModMask,\
                     self.__TExp_m,\
@@ -425,6 +425,7 @@ class Communication(threading.Thread):
                     raise Exception, "Communication Error: failure sending exposure parameters"
                 #self.__cond.release()
                 #print "run unlock"
+                print "Communication: Get buffer (t %f)" % (time.clock())
                 if self.__dll.xpci_getImgSeq_imxpad( \
                     B2, self.__ModMask, 7, \
                     self.__FramesNb, \
@@ -433,18 +434,22 @@ class Communication(threading.Thread):
                     #print "run lock"
                     #self.__cond.release()
                     raise Exception, "Communication Error: failure getting images"
+                print "Communication: Write buffer (t %f)" % (time.clock())
                 self.__FramesRdy = self.__FramesNb
+
+                #data = np.zeros([240,560],dtype='uint16')
                 if self.__frameCB:
                     for i in range(self.__FramesRdy):
                         arr = np.array(self.__ImgBuff[i][0:self.__BuffLen], dtype='uint16')
                         arr.resize(240,566)
-                        data = np.array(arr[:,5:565])
+                        data = np.array(arr[:,5:565], dtype='uint16')
+                        print "Save frame",i," (t %f)" % (time.clock())
                         FrameInfo = Core.HwFrameInfoType(i,\
-                                                    data,Core.Timestamp(),0,\
+                                                         data,Core.Timestamp(),0,\
                                                     Core.HwFrameInfoType.Transfer)
                         self.__frameCB.newFrameReady(FrameInfo)
-                        print "Frame",i,"ready"
-                    
+                        print "Frame",i,"ready (t %f)" % (time.clock())
+
                 self.__command = self.COM_NONE
 
             ### TEST   COMMAND ###
