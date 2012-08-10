@@ -35,7 +35,7 @@ namespace Xpad
   public:
 
     enum Status {
-      Ready, Exposure, Readout,Latency,Fault
+      Ready, Exposure, Readout,Fault
     };
 
     Camera();
@@ -48,7 +48,7 @@ namespace Xpad
     void getImageSize(Size& size /Out/);
     void setPixelDepth(ImageType pixel_depth);
     void getPixelDepth(ImageType& pixel_depth /Out/);
-    void getPixelSize(double& size /Out/);
+    void getPixelSize(double& x_size /Out/,double &y_size /Out/);
     void getDetectorType(std::string& type /Out/);
     void getDetectorModel(std::string& model /Out/);
 
@@ -69,7 +69,7 @@ namespace Xpad
     //---------------------------------------------------------------
     //- XPAD Stuff
     //- Set all the config G
-    void setAllConfigG(const std::vector<int>& allConfigG);
+    void setAllConfigG(const std::vector<long>& allConfigG);
     //- Set the F parameters
     void setFParameters(unsigned deadtime, unsigned init,
 			unsigned shutter, unsigned ovf,    unsigned mode,

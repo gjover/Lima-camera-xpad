@@ -32,10 +32,9 @@
 
 #define kPOST_MSG_TMO       2
 
-const size_t  XPAD_DLL_START_FAST_MSG		=	(yat::FIRST_USER_MSG + 100);
-const size_t  XPAD_DLL_START_FAST_ASYNC_MSG	=	(yat::FIRST_USER_MSG + 101);
-const size_t  XPAD_DLL_START_SLOW_B2_MSG	=	(yat::FIRST_USER_MSG + 103);
-const size_t  XPAD_DLL_START_SLOW_B4_MSG	=	(yat::FIRST_USER_MSG + 104);
+const size_t  XPAD_DLL_START_SYNC_MSG		=	(yat::FIRST_USER_MSG + 100);
+const size_t  XPAD_DLL_START_ASYNC_MSG		=	(yat::FIRST_USER_MSG + 101);
+
 
 ///////////////////////////////////////////////////////////
 
@@ -52,10 +51,19 @@ const size_t  XPAD_DLL_START_SLOW_B4_MSG	=	(yat::FIRST_USER_MSG + 104);
 
 using namespace std;
 
+#define SET(var, bit) ( var|=  (1 << bit)  )       /* positionne le bit numero 'bit' a 1 dans une variable*/
+#define CLR(var, bit) ( var&= ~(1 << bit)  )       /* positionne le bit numero 'bit' a 0 dans une variable*/
+#define GET(var, bit) ((var&   (1 << bit))?1:0 )   /* retourne la valeur du bit numero 'bit' dans une variable*/
+const int FIRST_TIMEOUT = 8000;
+#define XPIX_NOT_USED_YET 0
+#define XPIX_V1_COMPATIBILITY 0
+
+
 namespace lima
 {
 namespace Xpad
 {
+	
 	/*******************************************************************
 	* \class Camera
 	* \brief object controlling the xpad detector via xpix driver
@@ -67,10 +75,15 @@ namespace Xpad
 	public:
 
 		enum Status {
-			Ready, Exposure, Readout,Latency,Fault
+			Ready, Exposure, Readout,Fault
 		};
 
-		Camera();
+        enum XpadAcqType {
+	                SYNC = 0,
+	                ASYNC
+		};
+
+		Camera(string xpad_type);
 		~Camera();
 
 		void start();
@@ -80,7 +93,7 @@ namespace Xpad
 		void getImageSize(Size& size);
 		void setPixelDepth(ImageType pixel_depth);
 		void getPixelDepth(ImageType& pixel_depth);
-		void getPixelSize(double& size);
+		void getPixelSize(double& x_size,double& y_size);
 		void getDetectorType(std::string& type);
 		void getDetectorModel(std::string& model);
 
@@ -100,28 +113,34 @@ namespace Xpad
 	
 		//---------------------------------------------------------------
 		//- XPAD Stuff
-		//- Set all the config G
+		//! Set all the config G
 		void setAllConfigG(const vector<long>& allConfigG);
-		//- Set the F parameters
-		void setFParameters(unsigned deadtime, unsigned init,
-			unsigned shutter, unsigned ovf,    unsigned mode,
-			unsigned n,       unsigned p,
-			unsigned GP1,     unsigned GP2,    unsigned GP3,      unsigned GP4);
-		//-	Set the Acquisition type between fast and slow
+		//!	Set the Acquisition type between fast and slow
 		void setAcquisitionType(short acq_type);
-		//-	Load of flat config of value: flat_value (on each pixel)
+		//!	Load of flat config of value: flat_value (on each pixel)
 		void loadFlatConfig(unsigned flat_value);
-		//- Load all the config G with predefined values (on each chip)
-		void loadAllConfigG();
-		//- Load a wanted config G with a wanted value
+		//! Load all the config G 
+		void loadAllConfigG(unsigned long modNum, unsigned long chipId , unsigned long* config_values);
+		//! Load a wanted config G with a wanted value
 		void loadConfigG(const vector<unsigned long>& reg_and_value);
-		//- Load a known value to the pixel counters
+		//! Load a known value to the pixel counters
 		void loadAutoTest(unsigned known_value);
-		//- Get the DACL values
-		vector<uint16_t> getDacl();
-		//- Save and load Dacl
-		void saveAndloadDacl(uint16_t* all_dacls);
-	
+        //! Save the config L (DACL) to XPAD RAM
+        void saveConfigL(unsigned long modMask, unsigned long calibId, unsigned long chipId, unsigned long curRow,unsigned long* values);
+        //! Save the config G to XPAD RAM
+        void saveConfigG(unsigned long modMask, unsigned long calibId, unsigned long reg,unsigned long* values);
+	    //! Load the config to detector chips
+        void loadConfig(unsigned long modMask, unsigned long calibId);
+        //! Get the modules config (Local aka DACL)
+        unsigned short*& getModConfig();
+        //! Reset the detector
+        void reset();
+        //! Set the exposure parameters
+        void setExposureParameters( unsigned Texp,unsigned Twait,unsigned Tinit,
+			                        unsigned Tshutter,unsigned Tovf,unsigned mode, unsigned n,unsigned p,
+		                            unsigned nbImages,unsigned BusyOutSel,unsigned formatIMG,unsigned postProc,
+		                            unsigned GP1,unsigned GP2,unsigned GP3,unsigned GP4);
+
 	protected:
 		virtual void setMaxImageSizeCallbackActive(bool cb_active);	
 
@@ -139,43 +158,25 @@ namespace Xpad
 		int 			m_nb_frames;		
 		Size			m_image_size;
 		IMG_TYPE		m_pixel_depth;
-		unsigned short	m_trigger_type;
-		unsigned		m_exp_time;
+        unsigned int    m_imxpad_format;
+        unsigned int    m_imxpad_trigger_mode;
+        unsigned int    m_exp_time_usec;
+		int         	m_timeout_ms;
 
-		uint16_t**	pSeqImage;
-		uint16_t*	pOneImage;
-
-		yat::Mutex images_locker;
 
 		//---------------------------------
 		//- xpad stuff 
-		short			m_acquisition_type;
-		unsigned		m_modules_mask;
-		int				m_module_number;
-		unsigned		m_chip_number;
-		int				m_full_image_size_in_bytes;
-		unsigned		m_time_unit;
-		vector<long>	m_all_config_g;
+        Camera::XpadAcqType		m_acquisition_type;
+        unsigned int	        m_modules_mask;
+        int				        m_module_number;
+        unsigned int	        m_chip_number;
+        int				        m_full_image_size_in_bytes;
+        vector<long>	        m_all_config_g;
+        unsigned short 			m_xpad_model;
+        //unsigned short*         m_dacl;
 
-		//- FParameters
-		unsigned		m_fparameter_deadtime;
-		unsigned		m_fparameter_init;
-		unsigned		m_fparameter_shutter;
-		unsigned		m_fparameter_ovf;
-		unsigned		m_fparameter_mode;
-		unsigned		m_fparameter_n;
-		unsigned		m_fparameter_p;
-		unsigned		m_fparameter_GP1;
-		unsigned		m_fparameter_GP2;
-		unsigned		m_fparameter_GP3;
-		unsigned		m_fparameter_GP4;
-
-		Camera::Status	m_status;
-		bool			m_stop_asked;
-		bool			m_video_mode;
-
-
-
+        //---------------------------------
+        Camera::Status	m_status;
 	};
 
 } // namespace xpad
