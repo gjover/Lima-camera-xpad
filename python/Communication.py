@@ -90,6 +90,7 @@ class Communication(threading.Thread):
         # Module, Chip, Row, Column
         self.__DACL = np.zeros((2,7,120,82),dtype="int")
         self.__ITHL = np.zeros((2,7),dtype="int")
+        self.offsetITHL = 0
 
         # Standard Exposure parameters (in us)
         self.__TExp_m = ct.c_ushort((1000000 >> 16) & 0xFFFF)
@@ -166,10 +167,55 @@ class Communication(threading.Thread):
         time.sleep(0.01)
         return arr
 
+
+    @Core.DEB_MEMBER_FUNCT
+    def setITHLoffset(self,th) :
+        self.offsetITHL = th
+        self.__cond.acquire()
+        for i in range(2):
+            mmask = 0x01 << i
+            for j in range(7):
+                cmask = 0x01 << j
+                if self.__dll.xpci_modLoadConfigG(mmask, cmask, ITHL_V32,
+                                                  int(self.__ITHL[i][j] 
+                                                      + self.offsetITHL), 
+                                                  retbuff) != 0:
+                    raise Exception,"Communication Error: Configuration loading failure (%#.2X, %#.2X)" % (mmask, cmask)
+
+        self.__cond.release()
+        time.sleep(0.01)
+
+
+    @Core.DEB_MEMBER_FUNCT
+    def getITHLoffset(self) :
+        return self.offsetITHL
+
     @Core.DEB_MEMBER_FUNCT
     def setCalFiles(self,file1,file2) :
         self.__calFile1 = file1
         self.__calFile2 = file2
+        self.__cond.acquire()
+
+        # Read Configuration file
+        for i,filename in map(None, range(2), 
+                                   [self.__calFile1,self.__calFile2]):
+            try:
+                CFile = open(filename)
+            except IOError:
+                raise 
+                                           
+            for line in CFile:
+                if line.strip() == 'ITHL':
+                    ithl = CFile.next().strip().split(' ')
+                    self.__ITHL[i][:] = map(int, ithl)
+                if line.strip() == 'DACL':
+                    for k in range(120):
+                        for j in range(7):
+                            dacl = CFile.next().strip().split(' ')
+                            self.__DACL[i][j][k][:] = map(int,dacl)
+                
+        self.__cond.release()
+        time.sleep(0.01)
 
     @Core.DEB_MEMBER_FUNCT
     def getCalFiles(self) :
@@ -326,24 +372,8 @@ class Communication(threading.Thread):
             if self.__command == self.COM_CONF : 
                 print "Communication: Config Command"
 
-                # Read Configuration file
-                for i,filename,mask in \
-                        map(None, range(2), [self.__calFile1,self.__calFile2], [0x1,0x2]):
-                    try:
-                        CFile = open(filename)
-                    except IOError:
-                        raise 
-                                           
-                    for line in CFile:
-                        if line.strip() == 'ITHL':
-                            ithl = CFile.next().strip().split(' ')
-                            self.__ITHL[i][:] = map(int, ithl)
-                        if line.strip() == 'DACL':
-                            for k in range(120):
-                                for j in range(7):
-                                    dacl = CFile.next().strip().split(' ')
-                                    self.__DACL[i][j][k][:] = map(int,dacl)
-                
+                for i,mask in map(None, range(2), [0x1,0x2]):
+
                     # Save DACL values for each module
                     # Has to be in reverse order to avoid 
                     # overwriting of following pixels

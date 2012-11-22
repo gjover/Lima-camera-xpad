@@ -66,6 +66,14 @@ class Interface(Core.HwInterface) :
         self.__comm.Configure()            
 
     @Core.DEB_MEMBER_FUNCT
+    def setITHLoffset(self,th) :
+         self.__comm.setITHLoffset(th)
+
+    @Core.DEB_MEMBER_FUNCT
+    def getITHLoffset(self) :
+        return self.__comm.getITHLoffset()
+
+    @Core.DEB_MEMBER_FUNCT
     def setConfigId(self,Id):
         self.__comm.setConfigId(Id)
 
